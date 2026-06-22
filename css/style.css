@@ -1,0 +1,538 @@
+/* =========================================================================
+   Operation: Kohlebunker Defense
+   Dragos EMEA Forum 2026 — Munich
+   Dark industrial OT-security theme
+   ========================================================================= */
+
+:root {
+  --bg-0: #06080d;
+  --bg-1: #0a0f17;
+  --bg-2: #0f1622;
+  --grid: rgba(54, 211, 244, 0.06);
+  --panel: rgba(13, 20, 31, 0.82);
+  --panel-border: rgba(54, 211, 244, 0.22);
+
+  --cyan: #2ee6ff;
+  --cyan-dim: #1aa8c4;
+  --blue: #3b82f6;
+  --blue-deep: #1d4ed8;
+  --intel: #38bdf8;
+  --shield: #4ade80;
+  --plc: #facc15;
+  --alert: #ff3b46;
+  --alert-deep: #b91c2c;
+
+  --text: #e6f1ff;
+  --text-dim: #8aa0bd;
+
+  --font: "Segoe UI", "Roboto", "Helvetica Neue", system-ui, -apple-system,
+    sans-serif;
+  --mono: "SF Mono", "Consolas", "Roboto Mono", ui-monospace, monospace;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: var(--font);
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* =========================================================================
+   Shell + Canvas
+   ========================================================================= */
+#game-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+      120% 120% at 50% 0%,
+      #0c1422 0%,
+      var(--bg-0) 60%
+    ),
+    var(--bg-0);
+}
+
+#canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--bg-1);
+  touch-action: none;
+}
+
+/* =========================================================================
+   HUD
+   ========================================================================= */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(10px + var(--safe-top)) 16px 10px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(6, 8, 13, 0.92),
+    rgba(6, 8, 13, 0)
+  );
+}
+
+.hud-left,
+.hud-right {
+  display: flex;
+  gap: 18px;
+  flex: 1;
+}
+.hud-right {
+  justify-content: flex-end;
+}
+
+.hud-stat {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.hud-stat.align-right {
+  align-items: flex-end;
+}
+
+.hud-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+.hud-value {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cyan);
+  text-shadow: 0 0 12px rgba(46, 230, 255, 0.5);
+}
+
+.hud-center {
+  flex: 0 0 auto;
+  text-align: center;
+}
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+.brand-mark {
+  font-weight: 800;
+  letter-spacing: 4px;
+  font-size: 15px;
+  color: var(--text);
+}
+.brand-sub {
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  color: var(--cyan-dim);
+  margin-top: 2px;
+}
+
+.lives {
+  display: flex;
+  gap: 5px;
+  margin-top: 3px;
+}
+.life-shield {
+  width: 18px;
+  height: 20px;
+  filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.55));
+  transition: opacity 0.25s, transform 0.25s;
+}
+.life-shield.lost {
+  opacity: 0.18;
+  filter: none;
+  transform: scale(0.85);
+}
+
+/* =========================================================================
+   Status bar (powerup / patch progress)
+   ========================================================================= */
+#status-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + var(--safe-bottom));
+  transform: translateX(-50%);
+  z-index: 18;
+  min-width: 220px;
+  max-width: 80vw;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(6px);
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+#status-text {
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+#status-meter {
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+#status-meter-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--plc), var(--cyan));
+  transition: width 0.05s linear;
+}
+
+/* =========================================================================
+   Touch controls — virtual joystick
+   ========================================================================= */
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+}
+#joystick {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#joystick.active {
+  opacity: 1;
+}
+#joystick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(46, 230, 255, 0.1),
+    rgba(46, 230, 255, 0.03)
+  );
+  border: 2px solid rgba(46, 230, 255, 0.35);
+}
+#joystick-thumb {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  left: 34px;
+  top: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--cyan), var(--cyan-dim));
+  box-shadow: 0 0 18px rgba(46, 230, 255, 0.7);
+}
+
+/* =========================================================================
+   Overlays (start / game over)
+   ========================================================================= */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(20px + var(--safe-top)) 18px calc(20px + var(--safe-bottom));
+  background: radial-gradient(
+      120% 100% at 50% 0%,
+      rgba(12, 22, 38, 0.86),
+      rgba(6, 8, 13, 0.96)
+    );
+  backdrop-filter: blur(4px);
+  overflow-y: auto;
+}
+.overlay.hidden,
+.hidden {
+  display: none !important;
+}
+
+.overlay-inner {
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+  animation: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.logo-kicker {
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--cyan-dim);
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.title {
+  font-size: clamp(26px, 8vw, 44px);
+  line-height: 1.05;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.title-accent {
+  color: var(--cyan);
+  text-shadow: 0 0 24px rgba(46, 230, 255, 0.5);
+}
+.tagline {
+  margin: 14px 0 0;
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.briefing {
+  margin: 24px auto 18px;
+  max-width: 420px;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.briefing strong {
+  color: var(--text);
+}
+
+.legend {
+  list-style: none;
+  margin: 0 auto 24px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  max-width: 420px;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 8px currentColor;
+}
+.dot-intel {
+  background: var(--intel);
+  color: var(--intel);
+}
+.dot-shield {
+  background: var(--shield);
+  color: var(--shield);
+}
+.dot-plc {
+  background: var(--plc);
+  color: var(--plc);
+  border-radius: 2px;
+}
+.dot-apt {
+  background: var(--alert);
+  color: var(--alert);
+}
+
+/* Buttons */
+.btn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-weight: 800;
+  letter-spacing: 2px;
+  border-radius: 12px;
+  padding: 16px 38px;
+  font-size: 16px;
+  transition: transform 0.1s, box-shadow 0.2s, filter 0.2s;
+}
+.btn:active {
+  transform: scale(0.96);
+}
+.btn-primary {
+  color: #02121a;
+  background: linear-gradient(135deg, var(--cyan), var(--blue));
+  box-shadow: 0 0 24px rgba(46, 230, 255, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 34px rgba(46, 230, 255, 0.65);
+}
+
+.controls-hint {
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+.kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* =========================================================================
+   Game over specifics
+   ========================================================================= */
+.alert-badge {
+  display: inline-block;
+  padding: 8px 20px;
+  border-radius: 8px;
+  background: rgba(255, 59, 70, 0.12);
+  border: 1px solid rgba(255, 59, 70, 0.55);
+  color: var(--alert);
+  font-weight: 800;
+  letter-spacing: 4px;
+  font-size: 13px;
+  text-shadow: 0 0 14px rgba(255, 59, 70, 0.6);
+  animation: pulse-alert 1.4s ease-in-out infinite;
+}
+@keyframes pulse-alert {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.go-title {
+  font-size: clamp(24px, 7vw, 36px);
+  margin: 18px 0 6px;
+  font-weight: 800;
+}
+.score-readout {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin: 22px 0 10px;
+}
+.score-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.score-block-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+.score-block-value {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--cyan);
+  text-shadow: 0 0 14px rgba(46, 230, 255, 0.5);
+}
+.newbest {
+  color: var(--plc);
+  font-weight: 800;
+  letter-spacing: 3px;
+  font-size: 14px;
+  margin: 4px 0 0;
+  text-shadow: 0 0 16px rgba(250, 204, 21, 0.6);
+  animation: pulse-alert 1s ease-in-out infinite;
+}
+.go-summary {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 16px auto 22px;
+  max-width: 360px;
+}
+
+/* =========================================================================
+   Responsive tweaks
+   ========================================================================= */
+@media (max-width: 380px) {
+  .brand-sub {
+    display: none;
+  }
+  .hud-value {
+    font-size: 18px;
+  }
+  .legend {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 900px) {
+  /* keep playfield a comfortable centered panel on large desktop screens */
+  #canvas-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    box-shadow: 0 0 80px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Hide joystick entirely on devices without touch */
+@media (hover: hover) and (pointer: fine) {
+  #touch-controls {
+    display: none;
+  }
+}

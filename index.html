@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="theme-color" content="#06080d" />
+  <meta
+    name="description"
+    content="Operation: Kohlebunker Defense — an OT cybersecurity arcade game for the Dragos EMEA Forum 2026, Munich."
+  />
+  <title>Operation: Kohlebunker Defense — Dragos EMEA Forum 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- ===================== GAME SHELL ===================== -->
+  <div id="game-shell">
+    <!-- Canvas viewport -->
+    <div id="canvas-wrap">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- ===================== HUD ===================== -->
+      <header id="hud" aria-hidden="false">
+        <div class="hud-left">
+          <div class="hud-stat">
+            <span class="hud-label">SCORE</span>
+            <span class="hud-value" id="hud-score">0</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-label">BEST</span>
+            <span class="hud-value" id="hud-best">0</span>
+          </div>
+        </div>
+
+        <div class="hud-center">
+          <div class="brand">
+            <span class="brand-mark">DRAGOS</span>
+            <span class="brand-sub">EMEA FORUM · MUNICH 2026</span>
+          </div>
+        </div>
+
+        <div class="hud-right">
+          <div class="hud-stat align-right">
+            <span class="hud-label">LIVES</span>
+            <div class="lives" id="hud-lives" aria-label="lives"></div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Status ticker (powerups / patch progress) -->
+      <div id="status-bar" class="hidden">
+        <div id="status-text"></div>
+        <div id="status-meter"><div id="status-meter-fill"></div></div>
+      </div>
+
+      <!-- ===================== TOUCH CONTROLS ===================== -->
+      <div id="touch-controls" class="hidden">
+        <div id="joystick">
+          <div id="joystick-base"></div>
+          <div id="joystick-thumb"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== START SCREEN ===================== -->
+    <div id="start-screen" class="overlay">
+      <div class="overlay-inner">
+        <div class="logo-stack">
+          <div class="logo-kicker">DRAGOS · OT DEFENSE INITIATIVE</div>
+          <h1 class="title">
+            OPERATION:<br /><span class="title-accent">KOHLEBUNKER DEFENSE</span>
+          </h1>
+          <p class="tagline">Protect the ICS network.</p>
+        </div>
+
+        <div class="briefing">
+          <p>
+            You are a <strong>Dragos Defender</strong> deployed inside the Munich
+            Motorworld &amp; the historic Kohlebunker. Secure vulnerable
+            <strong>PLCs</strong>, harvest <strong>Threat Intel</strong>, grab
+            <strong>Platform Sensors</strong> for protection — and evade the
+            <strong>APTs</strong> hunting your network.
+          </p>
+        </div>
+
+        <ul class="legend">
+          <li><span class="dot dot-intel"></span> Threat Intel &mdash; points</li>
+          <li><span class="dot dot-shield"></span> Platform Sensor &mdash; shield</li>
+          <li><span class="dot dot-plc"></span> Vulnerable PLC &mdash; deploy &amp; patch</li>
+          <li><span class="dot dot-apt"></span> APT &mdash; avoid contact</li>
+        </ul>
+
+        <button id="start-btn" class="btn btn-primary">START MISSION</button>
+
+        <div class="controls-hint">
+          <span class="kbd">WASD</span> / <span class="kbd">◄ ▲ ▼ ►</span> to move
+          &nbsp;·&nbsp; on mobile use the joystick
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== GAME OVER SCREEN ===================== -->
+    <div id="gameover-screen" class="overlay hidden">
+      <div class="overlay-inner">
+        <div class="alert-badge">NETWORK COMPROMISED</div>
+        <h2 class="go-title">Containment Failed</h2>
+        <div class="score-readout">
+          <div class="score-block">
+            <span class="score-block-label">FINAL SCORE</span>
+            <span class="score-block-value" id="final-score">0</span>
+          </div>
+          <div class="score-block">
+            <span class="score-block-label">HIGH SCORE</span>
+            <span class="score-block-value" id="final-best">0</span>
+          </div>
+        </div>
+        <p id="newbest-banner" class="newbest hidden">★ NEW HIGH SCORE ★</p>
+        <p id="go-summary" class="go-summary"></p>
+        <button id="restart-btn" class="btn btn-primary">PLAY AGAIN</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/entities.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
