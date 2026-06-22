@@ -29,10 +29,29 @@ Compromised** screen shows your score; the high score is saved locally via
 `localStorage`.
 
 ### Leaderboard (Bestenliste)
-A local top-10 **Bestenliste** is stored on the device in `localStorage`. When
-a run earns a spot, the game-over screen prompts for a name; the board is also
-viewable any time from the **Bestenliste** button on the start screen (with a
-"Liste löschen" option to reset it). Scores are per-device — no backend.
+A top-10 **Bestenliste** with name entry on game over, also viewable any time
+from the **Bestenliste** button on the start screen.
+
+- **Out of the box:** a per-device board stored in `localStorage`.
+- **Global + non-deletable:** add a Firebase Realtime Database URL (below) and
+  the board becomes shared across all players and **append-only** — entries can
+  never be edited or deleted (enforced server-side by the security rules, not
+  by the client). If the network is unavailable the game falls back to the
+  local board automatically.
+
+#### Enabling the global Bestenliste (Firebase, free)
+1. Create a project at <https://console.firebase.google.com> → **Build →
+   Realtime Database → Create database** (pick a region, start in *locked
+   mode*).
+2. Open the **Rules** tab, paste the contents of [`firebase.rules.json`](firebase.rules.json),
+   and **Publish**. These rules allow anyone to *read* and *create* a score but
+   **forbid updates and deletes** (`".write": "!data.exists() && newData.exists()"`),
+   making the board global and tamper-resistant.
+3. Copy the database URL shown at the top of the Realtime Database page
+   (e.g. `https://your-project-default-rtdb.europe-west1.firebasedatabase.app`).
+4. Paste it into [`js/leaderboard-config.js`](js/leaderboard-config.js) as
+   `firebaseUrl` and push. Done — the URL is **not** a secret; protection comes
+   from the rules.
 
 ## Tech
 

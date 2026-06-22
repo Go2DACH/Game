@@ -15,9 +15,43 @@ const MIME = {
   ".md": "text/markdown",
 };
 
+// In-memory mock of a Firebase Realtime Database "scores" node.
+const mockDb = new Map(); // id -> entry
+let mockId = 0;
+let mockRejectWrites = false; // flip to simulate the create-only rule rejecting
+
 const server = http.createServer(async (req, res) => {
+  const path = req.url.split("?")[0];
+
+  // ---- Mock Firebase REST endpoint: /mockdb/scores.json ----
+  if (path === "/mockdb/scores.json") {
+    const cors = { "Access-Control-Allow-Origin": "*", "content-type": "application/json" };
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        if (mockRejectWrites) {
+          res.writeHead(401, cors).end(JSON.stringify({ error: "Permission denied" }));
+          return;
+        }
+        let entry = {};
+        try { entry = JSON.parse(body || "{}"); } catch {}
+        const id = "id" + ++mockId;
+        mockDb.set(id, entry);
+        res.writeHead(200, cors).end(JSON.stringify({ name: id }));
+      });
+      return;
+    }
+    // GET → object keyed by push id (Firebase shape)
+    const obj = {};
+    for (const [k, v] of mockDb) obj[k] = v;
+    res.writeHead(200, cors).end(JSON.stringify(Object.keys(obj).length ? obj : null));
+    return;
+  }
+
+  // ---- Static files ----
   try {
-    let p = decodeURIComponent(req.url.split("?")[0]);
+    let p = decodeURIComponent(path);
     if (p === "/") p = "/index.html";
     const full = join(ROOT, p);
     if (!full.startsWith(ROOT)) {
@@ -308,6 +342,96 @@ check("joystick thumb tracks drag", joyMoved.moved, `transform applied`);
 check("no errors on mobile pass", mErrors.length === 0, mErrors.slice(0, 3).join("; "));
 
 await mctx.close();
+
+// ---- Global leaderboard pass: point the game at the mock Firebase DB ----
+// Intercept the config script and inject our mock DB URL so the remote
+// read/write code path runs for real.
+const gctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+const gpage = await gctx.newPage();
+const gErrors = [];
+gpage.on("pageerror", (e) => gErrors.push(e.message));
+await gpage.route("**/js/leaderboard-config.js", (route) => {
+  route.fulfill({
+    status: 200,
+    contentType: "text/javascript",
+    body: `window.KB_LEADERBOARD = { firebaseUrl: "${base}/mockdb", path: "scores", top: 10, timeoutMs: 6000 };`,
+  });
+});
+await gpage.goto(base + "/index.html", { waitUntil: "networkidle" });
+const remoteOn = await gpage.evaluate(() => window.KB_LEADERBOARD.firebaseUrl);
+check("global config injected", /mockdb/.test(remoteOn), remoteOn);
+
+// Open the leaderboard from start → should label itself "global" and be empty
+await gpage.click("#intro-btn");
+await gpage.waitForTimeout(150);
+await gpage.click("#leaderboard-btn");
+await gpage.waitForTimeout(400);
+check("leaderboard labelled global", /global/i.test(await gpage.textContent("#lb-scope")));
+await gpage.click("#lb-back");
+
+// Pre-seed the global board via the mock so qualification/highlight is meaningful
+await gpage.evaluate(async (b) => {
+  await fetch(b + "/mockdb/scores.json", { method: "POST", body: JSON.stringify({ name: "ALICE", score: 5000, date: "2026-06-01", ts: 1 }) });
+}, base);
+
+// Play a quick run, force game over, submit a score → it must hit the mock DB
+await gpage.click("#start-btn");
+await gpage.waitForTimeout(300);
+// grab some intel for a non-zero score, then run into enemies
+for (let s = 0; s < 30; s++) {
+  const over = await gpage.evaluate(() => window.KBGame.state === "gameover");
+  if (over) break;
+  const dir = await gpage.evaluate(() => {
+    const g = window.KBGame, p = g.player;
+    const t = g.entities.intel[0] || g.entities.enemies[0];
+    return t ? { dx: t.x - p.x, dy: t.y - p.y } : null;
+  });
+  if (dir) {
+    const kx = dir.dx > 6 ? "ArrowRight" : dir.dx < -6 ? "ArrowLeft" : null;
+    const ky = dir.dy > 6 ? "ArrowDown" : dir.dy < -6 ? "ArrowUp" : null;
+    if (kx) await gpage.keyboard.down(kx);
+    if (ky) await gpage.keyboard.down(ky);
+    await gpage.waitForTimeout(60);
+    if (kx) await gpage.keyboard.up(kx);
+    if (ky) await gpage.keyboard.up(ky);
+  }
+}
+// ensure game over (steer into enemies)
+for (let s = 0; s < 300; s++) {
+  if (await gpage.evaluate(() => window.KBGame.state === "gameover")) break;
+  const dir = await gpage.evaluate(() => {
+    const g = window.KBGame, p = g.player, en = g.entities.enemies;
+    if (!en.length) return null;
+    let b = en[0], bd = Infinity;
+    for (const o of en) { const d = (o.x - p.x) ** 2 + (o.y - p.y) ** 2; if (d < bd) { bd = d; b = o; } }
+    return { dx: b.x - p.x, dy: b.y - p.y };
+  });
+  if (dir) {
+    const kx = dir.dx > 6 ? "ArrowRight" : dir.dx < -6 ? "ArrowLeft" : null;
+    const ky = dir.dy > 6 ? "ArrowDown" : dir.dy < -6 ? "ArrowUp" : null;
+    if (kx) await gpage.keyboard.down(kx);
+    if (ky) await gpage.keyboard.down(ky);
+    await gpage.waitForTimeout(50);
+    if (kx) await gpage.keyboard.up(kx);
+    if (ky) await gpage.keyboard.up(ky);
+  } else { await gpage.waitForTimeout(50); }
+}
+check("game over reached (global pass)", await gpage.evaluate(() => window.KBGame.state === "gameover"));
+// remote board is global, so name entry is offered for any score > 0
+check("name entry offered on global board", await gpage.isVisible("#go-nameentry"));
+await gpage.fill("#name-input", "GLOBALER");
+const beforeCount = mockDb.size;
+await gpage.click("#name-save");
+await gpage.waitForTimeout(800);
+check("score POSTed to global DB", mockDb.size === beforeCount + 1, `db size ${mockDb.size}`);
+const postedNames = [...mockDb.values()].map((e) => e.name);
+check("submitted entry stored remotely", postedNames.includes("GLOBALER"), postedNames.join(","));
+// the rendered board should now show both the seeded and the new entry
+const gRows = await gpage.$$eval("#go-leaderboard .lb-row", (els) => els.map((e) => e.textContent));
+check("global board shows seeded + own entry", gRows.some((t) => /ALICE/.test(t)) && gRows.some((t) => /GLOBALER/.test(t)), `rows=${gRows.length}`);
+check("no errors on global pass", gErrors.length === 0, gErrors.slice(0, 3).join("; "));
+
+await gctx.close();
 await browser.close();
 server.close();
 

@@ -38,7 +38,7 @@
   const lbList = document.getElementById("lb-leaderboard");
   const lbEmpty = document.getElementById("lb-empty");
   const lbBack = document.getElementById("lb-back");
-  const lbClear = document.getElementById("lb-clear");
+  const lbScope = document.getElementById("lb-scope");
   const goList = document.getElementById("go-leaderboard");
   const goLbEmpty = document.getElementById("go-lb-empty");
   const nameEntry = document.getElementById("go-nameentry");
@@ -46,9 +46,16 @@
   const nameSave = document.getElementById("name-save");
 
   const BEST_KEY = "kohlebunker_best_v1";
-  const SCORES_KEY = "kohlebunker_scores_v1"; // top-N leaderboard
+  const SCORES_KEY = "kohlebunker_scores_v1"; // local fallback / cache
   const NAME_KEY = "kohlebunker_name_v1"; // remember last entered name
-  const LB_MAX = 10; // how many entries the board keeps
+
+  // Global leaderboard config (js/leaderboard-config.js). Falls back to local.
+  const REMOTE = Object.assign(
+    { firebaseUrl: "", path: "scores", top: 10, timeoutMs: 6000 },
+    window.KB_LEADERBOARD || {}
+  );
+  const LB_MAX = REMOTE.top || 10; // how many entries the board shows
+  const remoteEnabled = () => !!REMOTE.firebaseUrl;
 
   /* ----------------------------------------------------------- world state */
   const world = { w: 0, h: 0, dpr: 1 };
@@ -116,7 +123,7 @@
     }
   }
 
-  /* ------------------------------------------------- Leaderboard storage */
+  /* ------------------------------------------- Leaderboard storage (local) */
   function loadScores() {
     try {
       const raw = JSON.parse(localStorage.getItem(SCORES_KEY) || "[]");
@@ -141,32 +148,86 @@
       /* storage unavailable — ignore */
     }
   }
-  // Does `score` earn a spot on the board?
-  function qualifies(score) {
-    if (score <= 0) return false;
+  function addLocalEntry(entry) {
     const list = loadScores();
-    return list.length < LB_MAX || score > list[list.length - 1].score;
-  }
-  // Insert a new run; returns the (sorted) index it landed at, or -1.
-  function addScoreEntry(name, score) {
-    const list = loadScores();
-    const entry = {
-      name: (name || "ANONYM").trim().slice(0, 14).toUpperCase() || "ANONYM",
-      score: score | 0,
-      date: new Date().toISOString().slice(0, 10),
-    };
     list.push(entry);
     list.sort((a, b) => b.score - a.score);
     const trimmed = list.slice(0, LB_MAX);
     saveScores(trimmed);
-    // find the freshly inserted row (first exact match)
-    return trimmed.findIndex(
-      (e) => e === entry || (e.score === entry.score && e.name === entry.name)
-    );
+    return trimmed;
+  }
+  // Local-only "did this make the board?" (used when remote is off).
+  function qualifiesLocal(score) {
+    if (score <= 0) return false;
+    const list = loadScores();
+    return list.length < LB_MAX || score > list[list.length - 1].score;
+  }
+
+  /* --------------------------------------------- Leaderboard remote (Firebase)
+     Global + append-only. Write-protection is enforced by the database
+     security rules (create-only), see firebase.rules.json. */
+  function withTimeout(promise, ms) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    return { signal: ctrl.signal, done: () => clearTimeout(t) };
+  }
+  async function remoteRead() {
+    if (!remoteEnabled()) return null;
+    const url =
+      `${REMOTE.firebaseUrl}/${REMOTE.path}.json` +
+      `?orderBy=%22score%22&limitToLast=${LB_MAX}`;
+    const to = withTimeout(null, REMOTE.timeoutMs);
+    try {
+      const res = await fetch(url, { signal: to.signal });
+      to.done();
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data) return [];
+      // Firebase returns an object keyed by push-id → flatten + sort desc.
+      return Object.values(data)
+        .filter((e) => e && typeof e.score === "number")
+        .map((e) => ({
+          name: String(e.name || "ANONYM").slice(0, 14),
+          score: e.score | 0,
+          date: e.date || "",
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, LB_MAX);
+    } catch (e) {
+      to.done();
+      return null; // network/timeout → caller falls back to local
+    }
+  }
+  async function remoteSubmit(entry) {
+    if (!remoteEnabled()) return false;
+    const url = `${REMOTE.firebaseUrl}/${REMOTE.path}.json`;
+    const to = withTimeout(null, REMOTE.timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+        signal: to.signal,
+      });
+      to.done();
+      return res.ok;
+    } catch (e) {
+      to.done();
+      return false;
+    }
+  }
+
+  /* ----------------------------------------------------- shared rendering */
+  function makeEntry(name, score) {
+    return {
+      name: (name || "ANONYM").trim().slice(0, 14).toUpperCase() || "ANONYM",
+      score: score | 0,
+      date: new Date().toISOString().slice(0, 10),
+      ts: Date.now(),
+    };
   }
   // Render a list of entries into an <ol>, optionally highlighting one row.
-  function renderLeaderboard(listEl, emptyEl, highlightIndex = -1) {
-    const list = loadScores();
+  function renderRows(listEl, list, emptyEl, highlightIndex = -1) {
     listEl.innerHTML = "";
     if (emptyEl) emptyEl.classList.toggle("hidden", list.length > 0);
     list.forEach((e, i) => {
@@ -185,6 +246,44 @@
       li.append(rank, nm, sc);
       listEl.appendChild(li);
     });
+  }
+  function showLoading(listEl, emptyEl) {
+    listEl.innerHTML = "";
+    if (emptyEl) {
+      emptyEl.classList.remove("hidden");
+      emptyEl.textContent = "Lade Bestenliste …";
+    }
+  }
+  // Fetch (remote first, else local) and render into the given list element.
+  async function refreshLeaderboard(listEl, emptyEl, highlight) {
+    let list = null;
+    if (remoteEnabled()) {
+      showLoading(listEl, emptyEl);
+      list = await remoteRead();
+    }
+    let highlightIdx = -1;
+    if (list) {
+      // mirror remote top-N locally so an offline device still shows something
+      saveScores(list);
+      if (highlight) {
+        highlightIdx = list.findIndex(
+          (e) => e.name === highlight.name && e.score === highlight.score
+        );
+      }
+    } else {
+      list = loadScores();
+      if (emptyEl) {
+        emptyEl.textContent = remoteEnabled()
+          ? "Bestenliste offline — zeige lokale Werte."
+          : "Noch keine Einträge — sei der erste Defender!";
+      }
+      if (highlight) {
+        highlightIdx = list.findIndex(
+          (e) => e.name === highlight.name && e.score === highlight.score
+        );
+      }
+    }
+    renderRows(listEl, list, emptyEl, highlightIdx);
   }
 
   /* ================================================================= Input */
@@ -396,36 +495,45 @@
       ` over ${Math.floor(game.elapsed)}s before the breach.`;
 
     // ---- leaderboard (Bestenliste) ----
-    if (qualifies(game.score)) {
-      // offer to record the run under a name
+    // With a global board everyone may submit (top-N is shown); locally we
+    // only prompt when the run actually makes the per-device board.
+    const canSubmit =
+      game.score > 0 && (remoteEnabled() || qualifiesLocal(game.score));
+    if (canSubmit) {
       pendingScore = game.score;
       nameInput.value = loadName();
       nameEntry.classList.remove("hidden");
       nameSave.disabled = false;
-      renderLeaderboard(goList, goLbEmpty, -1);
       // focus shortly after the overlay animates in (skip on touch to avoid
       // the keyboard popping up over the board immediately)
       if (!isTouch()) setTimeout(() => nameInput.focus(), 350);
     } else {
       pendingScore = 0;
       nameEntry.classList.add("hidden");
-      renderLeaderboard(goList, goLbEmpty, -1);
     }
+    refreshLeaderboard(goList, goLbEmpty, null);
 
     gameoverScreen.classList.remove("hidden");
     KB.beep(140, 0.5, "sawtooth", 0.08);
   }
 
   // Commit the pending run to the leaderboard under the entered name.
-  function submitScore() {
+  async function submitScore() {
     if (!pendingScore) return;
     const name = nameInput.value.trim() || "ANONYM";
     saveName(name);
-    const idx = addScoreEntry(name, pendingScore);
+    const entry = makeEntry(name, pendingScore);
     pendingScore = 0;
-    nameEntry.classList.add("hidden");
     nameSave.disabled = true;
-    renderLeaderboard(goList, goLbEmpty, idx);
+    nameSave.textContent = "…";
+    addLocalEntry(entry); // always cache locally
+    if (remoteEnabled()) await remoteSubmit(entry);
+    nameEntry.classList.add("hidden");
+    nameSave.textContent = "SPEICHERN";
+    await refreshLeaderboard(goList, goLbEmpty, {
+      name: entry.name,
+      score: entry.score,
+    });
     KB.beep(880, 0.1, "triangle", 0.05);
   }
 
@@ -445,8 +553,13 @@
   }
 
   function openLeaderboard() {
-    renderLeaderboard(lbList, lbEmpty, -1);
+    if (lbScope) {
+      lbScope.textContent = remoteEnabled()
+        ? "Globale Bestenliste"
+        : "Lokale Bestenliste (dieses Gerät)";
+    }
     leaderboardScreen.classList.remove("hidden");
+    refreshLeaderboard(lbList, lbEmpty, null);
   }
   function closeLeaderboard() {
     leaderboardScreen.classList.add("hidden");
@@ -776,12 +889,6 @@
   // Leaderboard controls
   leaderboardBtn.addEventListener("click", openLeaderboard);
   lbBack.addEventListener("click", closeLeaderboard);
-  lbClear.addEventListener("click", () => {
-    if (confirm("Bestenliste wirklich löschen?")) {
-      saveScores([]);
-      renderLeaderboard(lbList, lbEmpty, -1);
-    }
-  });
   nameSave.addEventListener("click", submitScore);
   nameInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {

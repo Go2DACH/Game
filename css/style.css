@@ -679,8 +679,15 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-top: 18px;
+}
+.lb-scope {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
 }
 
 /* Name entry */

@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "scores": {
+      ".read": true,
+      ".indexOn": ["score"],
+      "$entry": {
+        ".write": "!data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['name','score']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 14 && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 100000000",
+        "name": { ".validate": "newData.isString()" },
+        "score": { ".validate": "newData.isNumber()" },
+        "date": { ".validate": "newData.isString()" },
+        "ts": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}
