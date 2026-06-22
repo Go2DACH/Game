@@ -606,6 +606,39 @@
   startBtn.addEventListener("click", startGame);
   restartBtn.addEventListener("click", restartGame);
 
+  // Lightweight inspection handle for debugging / automated tests.
+  // Read-only snapshot of live state — does not affect gameplay.
+  window.KBGame = {
+    get state() {
+      return state;
+    },
+    get score() {
+      return game.score;
+    },
+    get lives() {
+      return game.lives;
+    },
+    get player() {
+      return game.player ? { x: game.player.x, y: game.player.y } : null;
+    },
+    get counts() {
+      return {
+        enemies: game.enemies.length,
+        intel: game.intel.length,
+        sensors: game.sensors.length,
+        plcs: game.plcs.length,
+      };
+    },
+    get entities() {
+      const pos = (a) => a.map((o) => ({ x: o.x, y: o.y }));
+      return {
+        intel: pos(game.intel),
+        plcs: game.plcs.map((o) => ({ x: o.x, y: o.y, patched: o.patched })),
+        enemies: pos(game.enemies),
+      };
+    },
+  };
+
   resize();
   syncHud();
   // draw the background once behind the start overlay

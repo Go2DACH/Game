@@ -46,6 +46,24 @@ js/game.js         Loop, state machine, input, spawning, collisions
 assets/            Reserved for optional sprites/audio
 ```
 
+## Testing
+
+A headless end-to-end suite (`test/deep-test.mjs`) drives the real game in
+Chromium via Playwright — load, start screen, keyboard movement, intel
+collection, PLC patching, lives/HUD, game-over + high-score persistence,
+restart, and mobile touch/joystick.
+
+```bash
+npx playwright install chromium      # one-time
+node test/deep-test.mjs              # runs all 21 checks
+# In a sandboxed env, point at a prebuilt binary:
+# KB_CHROMIUM=/path/to/chrome node test/deep-test.mjs
+```
+
+The game also exposes a read-only `window.KBGame` inspection handle
+(state/score/lives/entity positions) used by the suite — it never mutates
+gameplay.
+
 ## Deploy to GitHub Pages
 Push to the repository and enable **Settings → Pages → Deploy from branch**
 (root). No build configuration needed — it is fully static.
