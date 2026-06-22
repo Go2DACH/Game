@@ -18,7 +18,7 @@
    ========================================================================= */
 window.KB_LEADERBOARD = {
   // Leave "" to use the local-only board. Paste your DB URL to go global.
-  firebaseUrl: "",
+  firebaseUrl: "https://game-7ca92-default-rtdb.europe-west1.firebasedatabase.app",
 
   // Node under which scores are stored, and how many to show.
   path: "scores",
