@@ -98,6 +98,7 @@
         </ul>
 
         <button id="start-btn" class="btn btn-primary">START MISSION</button>
+        <button id="leaderboard-btn" class="btn btn-ghost">BESTENLISTE</button>
 
         <div class="controls-hint">
           <span class="kbd">WASD</span> / <span class="kbd">◄ ▲ ▼ ►</span> to move
@@ -123,7 +124,54 @@
         </div>
         <p id="newbest-banner" class="newbest hidden">★ NEW HIGH SCORE ★</p>
         <p id="go-summary" class="go-summary"></p>
+
+        <!-- Name entry (shown only when the run reaches the leaderboard) -->
+        <div id="go-nameentry" class="nameentry hidden">
+          <label class="nameentry-label" for="name-input"
+            >Du bist in der Bestenliste! Trag dich ein:</label
+          >
+          <div class="nameentry-row">
+            <input
+              id="name-input"
+              type="text"
+              maxlength="14"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="DEIN NAME"
+            />
+            <button id="name-save" class="btn btn-primary btn-sm">SPEICHERN</button>
+          </div>
+        </div>
+
+        <!-- Leaderboard on the game-over screen -->
+        <div class="leaderboard">
+          <div class="leaderboard-title">BESTENLISTE</div>
+          <ol id="go-leaderboard" class="leaderboard-list"></ol>
+          <p id="go-lb-empty" class="lb-empty hidden">
+            Noch keine Einträge — sei der erste Defender!
+          </p>
+        </div>
+
         <button id="restart-btn" class="btn btn-primary">PLAY AGAIN</button>
+      </div>
+    </div>
+
+    <!-- ===================== LEADERBOARD SCREEN ===================== -->
+    <div id="leaderboard-screen" class="overlay hidden">
+      <div class="overlay-inner">
+        <div class="logo-kicker">DRAGOS · HALL OF DEFENDERS</div>
+        <h2 class="go-title">Bestenliste</h2>
+        <div class="leaderboard">
+          <ol id="lb-leaderboard" class="leaderboard-list"></ol>
+          <p id="lb-empty" class="lb-empty hidden">
+            Noch keine Einträge — sei der erste Defender!
+          </p>
+        </div>
+        <div class="lb-actions">
+          <button id="lb-back" class="btn btn-primary">ZURÜCK</button>
+          <button id="lb-clear" class="btn btn-ghost btn-sm">Liste löschen</button>
+        </div>
       </div>
     </div>
   </div>

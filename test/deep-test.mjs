@@ -219,7 +219,18 @@ if (await page.isVisible("#gameover-screen")) {
   const goBest = parseInt((await page.textContent("#final-best")).replace(/\D/g, ""), 10);
   check("game-over best score persisted", goBest >= 1234, `best=${goBest}`);
 
-  // localStorage updated if we beat it
+  // ---- Leaderboard (Bestenliste) ----
+  check("name entry shown for a qualifying score", await page.isVisible("#go-nameentry"));
+  await page.fill("#name-input", "TESTER");
+  await page.click("#name-save");
+  await page.waitForTimeout(200);
+  const goRows = await page.$$eval("#go-leaderboard .lb-row", (els) => els.map((e) => e.textContent));
+  check("leaderboard row added after save", goRows.some((t) => /TESTER/i.test(t)), `rows=${goRows.length}`);
+  check("name entry hides after saving", !(await page.isVisible("#go-nameentry")));
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("kohlebunker_scores_v1") || "[]"));
+  check("leaderboard persisted to localStorage", stored.length > 0 && stored[0].name === "TESTER", JSON.stringify(stored[0] || {}));
+
+  // Play Again restarts cleanly
   await page.click("#restart-btn");
   await page.waitForTimeout(300);
   check("Play Again restarts (overlays hidden)", !(await page.isVisible("#gameover-screen")) && !(await page.isVisible("#start-screen")));
@@ -228,6 +239,18 @@ if (await page.isVisible("#gameover-screen")) {
   });
   check("lives reset to 3 on restart", livesAfterRestart === 3, `active=${livesAfterRestart}`);
 }
+
+// ---- Leaderboard opens from the start screen and survives reload ----
+await page.reload({ waitUntil: "networkidle" });
+check("start screen visible after reload", await page.isVisible("#start-screen"));
+await page.click("#leaderboard-btn");
+await page.waitForTimeout(200);
+check("leaderboard overlay opens from start screen", await page.isVisible("#leaderboard-screen"));
+const lbRows = await page.$$eval("#lb-leaderboard .lb-row", (els) => els.map((e) => e.textContent));
+check("leaderboard persists across reload", lbRows.some((t) => /TESTER/i.test(t)), `rows=${lbRows.length}`);
+await page.click("#lb-back");
+await page.waitForTimeout(150);
+check("leaderboard overlay closes via Back", !(await page.isVisible("#leaderboard-screen")));
 
 await ctx.close();
 

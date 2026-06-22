@@ -30,11 +30,28 @@
   const joystick = document.getElementById("joystick");
   const joyThumb = document.getElementById("joystick-thumb");
 
+  // Leaderboard (Bestenliste) elements
+  const leaderboardBtn = document.getElementById("leaderboard-btn");
+  const leaderboardScreen = document.getElementById("leaderboard-screen");
+  const lbList = document.getElementById("lb-leaderboard");
+  const lbEmpty = document.getElementById("lb-empty");
+  const lbBack = document.getElementById("lb-back");
+  const lbClear = document.getElementById("lb-clear");
+  const goList = document.getElementById("go-leaderboard");
+  const goLbEmpty = document.getElementById("go-lb-empty");
+  const nameEntry = document.getElementById("go-nameentry");
+  const nameInput = document.getElementById("name-input");
+  const nameSave = document.getElementById("name-save");
+
   const BEST_KEY = "kohlebunker_best_v1";
+  const SCORES_KEY = "kohlebunker_scores_v1"; // top-N leaderboard
+  const NAME_KEY = "kohlebunker_name_v1"; // remember last entered name
+  const LB_MAX = 10; // how many entries the board keeps
 
   /* ----------------------------------------------------------- world state */
   const world = { w: 0, h: 0, dpr: 1 };
   let state = "start"; // start | playing | gameover
+  let pendingScore = 0; // score awaiting a leaderboard name entry
 
   const game = {
     player: null,
@@ -97,6 +114,77 @@
     }
   }
 
+  /* ------------------------------------------------- Leaderboard storage */
+  function loadScores() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(SCORES_KEY) || "[]");
+      if (!Array.isArray(raw)) return [];
+      return raw
+        .filter((e) => e && typeof e.score === "number")
+        .map((e) => ({
+          name: String(e.name || "ANONYM").slice(0, 14),
+          score: e.score | 0,
+          date: e.date || "",
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, LB_MAX);
+    } catch (e) {
+      return [];
+    }
+  }
+  function saveScores(list) {
+    try {
+      localStorage.setItem(SCORES_KEY, JSON.stringify(list.slice(0, LB_MAX)));
+    } catch (e) {
+      /* storage unavailable — ignore */
+    }
+  }
+  // Does `score` earn a spot on the board?
+  function qualifies(score) {
+    if (score <= 0) return false;
+    const list = loadScores();
+    return list.length < LB_MAX || score > list[list.length - 1].score;
+  }
+  // Insert a new run; returns the (sorted) index it landed at, or -1.
+  function addScoreEntry(name, score) {
+    const list = loadScores();
+    const entry = {
+      name: (name || "ANONYM").trim().slice(0, 14).toUpperCase() || "ANONYM",
+      score: score | 0,
+      date: new Date().toISOString().slice(0, 10),
+    };
+    list.push(entry);
+    list.sort((a, b) => b.score - a.score);
+    const trimmed = list.slice(0, LB_MAX);
+    saveScores(trimmed);
+    // find the freshly inserted row (first exact match)
+    return trimmed.findIndex(
+      (e) => e === entry || (e.score === entry.score && e.name === entry.name)
+    );
+  }
+  // Render a list of entries into an <ol>, optionally highlighting one row.
+  function renderLeaderboard(listEl, emptyEl, highlightIndex = -1) {
+    const list = loadScores();
+    listEl.innerHTML = "";
+    if (emptyEl) emptyEl.classList.toggle("hidden", list.length > 0);
+    list.forEach((e, i) => {
+      const li = document.createElement("li");
+      li.className =
+        "lb-row rank-" + (i + 1) + (i === highlightIndex ? " you" : "");
+      const rank = document.createElement("span");
+      rank.className = "lb-rank";
+      rank.textContent = i + 1;
+      const nm = document.createElement("span");
+      nm.className = "lb-name";
+      nm.textContent = e.name;
+      const sc = document.createElement("span");
+      sc.className = "lb-score";
+      sc.textContent = formatScore(e.score);
+      li.append(rank, nm, sc);
+      listEl.appendChild(li);
+    });
+  }
+
   /* ================================================================= Input */
   const keys = Object.create(null);
   const input = { x: 0, y: 0 }; // movement vector fed to the player
@@ -106,7 +194,14 @@
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k))
       e.preventDefault();
     keys[k] = true;
+    // Escape closes the leaderboard overlay
+    if (k === "escape" && !leaderboardScreen.classList.contains("hidden")) {
+      closeLeaderboard();
+      return;
+    }
+    // don't trigger start/restart while the leaderboard overlay is up
     if (k === "enter" && state !== "playing") {
+      if (!leaderboardScreen.classList.contains("hidden")) return;
       state === "start" ? startGame() : restartGame();
     }
   });
@@ -263,6 +358,8 @@
     state = "playing";
     startScreen.classList.add("hidden");
     gameoverScreen.classList.add("hidden");
+    leaderboardScreen.classList.add("hidden");
+    nameEntry.classList.add("hidden");
     if (isTouch()) touchControls.classList.remove("hidden");
     KB.beep(660, 0.1, "triangle");
   }
@@ -290,8 +387,62 @@
       ` and collected ${game.intelCollected} threat-intel package` +
       (game.intelCollected === 1 ? "" : "s") +
       ` over ${Math.floor(game.elapsed)}s before the breach.`;
+
+    // ---- leaderboard (Bestenliste) ----
+    if (qualifies(game.score)) {
+      // offer to record the run under a name
+      pendingScore = game.score;
+      nameInput.value = loadName();
+      nameEntry.classList.remove("hidden");
+      nameSave.disabled = false;
+      renderLeaderboard(goList, goLbEmpty, -1);
+      // focus shortly after the overlay animates in (skip on touch to avoid
+      // the keyboard popping up over the board immediately)
+      if (!isTouch()) setTimeout(() => nameInput.focus(), 350);
+    } else {
+      pendingScore = 0;
+      nameEntry.classList.add("hidden");
+      renderLeaderboard(goList, goLbEmpty, -1);
+    }
+
     gameoverScreen.classList.remove("hidden");
     KB.beep(140, 0.5, "sawtooth", 0.08);
+  }
+
+  // Commit the pending run to the leaderboard under the entered name.
+  function submitScore() {
+    if (!pendingScore) return;
+    const name = nameInput.value.trim() || "ANONYM";
+    saveName(name);
+    const idx = addScoreEntry(name, pendingScore);
+    pendingScore = 0;
+    nameEntry.classList.add("hidden");
+    nameSave.disabled = true;
+    renderLeaderboard(goList, goLbEmpty, idx);
+    KB.beep(880, 0.1, "triangle", 0.05);
+  }
+
+  function loadName() {
+    try {
+      return localStorage.getItem(NAME_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+  function saveName(n) {
+    try {
+      localStorage.setItem(NAME_KEY, n);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function openLeaderboard() {
+    renderLeaderboard(lbList, lbEmpty, -1);
+    leaderboardScreen.classList.remove("hidden");
+  }
+  function closeLeaderboard() {
+    leaderboardScreen.classList.add("hidden");
   }
 
   function isTouch() {
@@ -605,6 +756,24 @@
   /* ============================================================== Bootstrap */
   startBtn.addEventListener("click", startGame);
   restartBtn.addEventListener("click", restartGame);
+
+  // Leaderboard controls
+  leaderboardBtn.addEventListener("click", openLeaderboard);
+  lbBack.addEventListener("click", closeLeaderboard);
+  lbClear.addEventListener("click", () => {
+    if (confirm("Bestenliste wirklich löschen?")) {
+      saveScores([]);
+      renderLeaderboard(lbList, lbEmpty, -1);
+    }
+  });
+  nameSave.addEventListener("click", submitScore);
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitScore();
+    }
+    e.stopPropagation(); // don't let game hotkeys fire while typing
+  });
 
   // Lightweight inspection handle for debugging / automated tests.
   // Read-only snapshot of live state — does not affect gameplay.

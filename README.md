@@ -28,6 +28,12 @@ APTs get faster and more numerous over time. When lives hit 0 the **Network
 Compromised** screen shows your score; the high score is saved locally via
 `localStorage`.
 
+### Leaderboard (Bestenliste)
+A local top-10 **Bestenliste** is stored on the device in `localStorage`. When
+a run earns a spot, the game-over screen prompts for a name; the board is also
+viewable any time from the **Bestenliste** button on the start screen (with a
+"Liste löschen" option to reset it). Scores are per-device — no backend.
+
 ## Tech
 
 - **Pure Vanilla** HTML5 Canvas + CSS3 + ES6 — no engines, no build step.
