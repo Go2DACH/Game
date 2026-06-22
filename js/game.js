@@ -17,6 +17,8 @@
   const elStatusText = document.getElementById("status-text");
   const elStatusFill = document.getElementById("status-meter-fill");
 
+  const introScreen = document.getElementById("intro-screen");
+  const introBtn = document.getElementById("intro-btn");
   const startScreen = document.getElementById("start-screen");
   const gameoverScreen = document.getElementById("gameover-screen");
   const startBtn = document.getElementById("start-btn");
@@ -199,8 +201,13 @@
       closeLeaderboard();
       return;
     }
-    // don't trigger start/restart while the leaderboard overlay is up
     if (k === "enter" && state !== "playing") {
+      // intro first: Enter just acknowledges the security notice
+      if (!introScreen.classList.contains("hidden")) {
+        dismissIntro();
+        return;
+      }
+      // don't trigger start/restart while the leaderboard overlay is up
       if (!leaderboardScreen.classList.contains("hidden")) return;
       state === "start" ? startGame() : restartGame();
     }
@@ -754,6 +761,15 @@
   }
 
   /* ============================================================== Bootstrap */
+  // Intro "Security Notice" → reveal the start screen
+  function dismissIntro() {
+    KB.initAudio(); // first user gesture — unlock audio
+    introScreen.classList.add("hidden");
+    startScreen.classList.remove("hidden");
+    KB.beep(520, 0.08, "triangle", 0.05);
+  }
+  introBtn.addEventListener("click", dismissIntro);
+
   startBtn.addEventListener("click", startGame);
   restartBtn.addEventListener("click", restartGame);
 

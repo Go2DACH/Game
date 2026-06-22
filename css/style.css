@@ -457,6 +457,64 @@ body {
 }
 
 /* =========================================================================
+   Intro / Security Notice dialog
+   ========================================================================= */
+.intro-dialog {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid rgba(255, 59, 70, 0.45);
+  box-shadow: 0 0 50px rgba(255, 59, 70, 0.25),
+    0 18px 60px rgba(0, 0, 0, 0.6);
+  text-align: left;
+}
+.intro-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  background: rgba(255, 59, 70, 0.14);
+  border-bottom: 1px solid rgba(255, 59, 70, 0.4);
+}
+.intro-bar-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--alert);
+  box-shadow: 0 0 10px var(--alert);
+  animation: pulse-alert 1.2s ease-in-out infinite;
+}
+.intro-bar-title {
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  font-size: 12px;
+  color: var(--alert);
+}
+.intro-body {
+  padding: 26px 22px 24px;
+  text-align: center;
+}
+.intro-q {
+  margin: 0 0 12px;
+  font-size: clamp(19px, 5.4vw, 24px);
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text);
+}
+.intro-text {
+  margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.intro-text strong {
+  color: var(--cyan);
+}
+
+/* =========================================================================
    Game over specifics
    ========================================================================= */
 .alert-badge {

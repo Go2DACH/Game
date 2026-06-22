@@ -64,11 +64,14 @@ await page.goto(base + "/index.html", { waitUntil: "networkidle" });
 // 1. No load-time errors
 check("page loads without JS errors", pageErrors.length === 0, pageErrors.join("; "));
 
-// 2. Start screen visible, game-over hidden
-check(
-  "start screen visible on load",
-  await page.isVisible("#start-screen")
-);
+// 2. Intro "Security Notice" shows first, start screen hidden behind it
+check("intro screen visible on load", await page.isVisible("#intro-screen"));
+check("intro shows the security-notice text", /trusted link/i.test(await page.textContent("#intro-screen")));
+check("start screen hidden behind intro", !(await page.isVisible("#start-screen")));
+// dismiss the intro → start screen appears
+await page.click("#intro-btn");
+await page.waitForTimeout(200);
+check("intro dismissed reveals start screen", !(await page.isVisible("#intro-screen")) && (await page.isVisible("#start-screen")));
 check(
   "game-over hidden on load",
   !(await page.isVisible("#gameover-screen"))
@@ -87,7 +90,9 @@ await page.reload({ waitUntil: "networkidle" });
 const bestShown = await page.textContent("#hud-best");
 check("high score read from localStorage", bestShown.replace(/[^0-9]/g, "") === "1234", `shown="${bestShown}"`);
 
-// 5. Start the mission
+// 5. Start the mission (dismiss the intro that re-appears after reload)
+await page.click("#intro-btn");
+await page.waitForTimeout(150);
 await page.click("#start-btn");
 await page.waitForTimeout(300);
 check("start screen hidden after Start", !(await page.isVisible("#start-screen")));
@@ -242,6 +247,8 @@ if (await page.isVisible("#gameover-screen")) {
 
 // ---- Leaderboard opens from the start screen and survives reload ----
 await page.reload({ waitUntil: "networkidle" });
+await page.click("#intro-btn"); // get past the security notice
+await page.waitForTimeout(150);
 check("start screen visible after reload", await page.isVisible("#start-screen"));
 await page.click("#leaderboard-btn");
 await page.waitForTimeout(200);
@@ -264,6 +271,9 @@ const mpage = await mctx.newPage();
 const mErrors = [];
 mpage.on("pageerror", (e) => mErrors.push(e.message));
 await mpage.goto(base + "/index.html", { waitUntil: "networkidle" });
+check("intro visible on mobile load", await mpage.isVisible("#intro-screen"));
+await mpage.click("#intro-btn");
+await mpage.waitForTimeout(150);
 await mpage.click("#start-btn");
 await mpage.waitForTimeout(200);
 check("touch controls shown on mobile", await mpage.isVisible("#touch-controls"));
